@@ -12,11 +12,23 @@ Aliases are stored in `~/.config/cda/aliases` as a simple tab-separated text fil
 
 ## Install
 
-Clone the repo, then run the installer:
+Choose a directory where you keep local tools or project checkouts, for example:
 
 ```bash
-git clone https://github.com/hruskamiro/cda.git ~/.local/share/cda
-cd ~/.local/share/cda
+mkdir -p ~/tools
+cd ~/tools
+```
+
+Then clone the repo:
+
+```bash
+git clone https://github.com/hruskamiro/cda.git
+cd cda
+```
+
+Run the installer:
+
+```bash
 ./install.sh
 ```
 
@@ -77,7 +89,7 @@ Alias data lives outside the repo:
 Override the config location with `CDA_ALIASES_FILE`:
 
 ```bash
-CDA_ALIASES_FILE=/path/to/aliases source ~/.local/share/cda/cda.sh
+CDA_ALIASES_FILE=/path/to/aliases source ~/tools/cda/cda.sh
 ```
 
 The file format is one alias per line:
@@ -91,14 +103,14 @@ alias<TAB>/absolute/path
 Remove the startup entry from `~/.bashrc`:
 
 ```bash
-cd ~/.local/share/cda
+cd ~/tools/cda
 ./install.sh uninstall
 ```
 
 Then remove the clone if you no longer want the source:
 
 ```bash
-rm -rf ~/.local/share/cda
+rm -rf ~/tools/cda
 ```
 
 ## License
