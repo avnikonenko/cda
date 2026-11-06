@@ -197,4 +197,66 @@ done
   if _cda_save_directory "$TEST_DIR/a" 2>/dev/null; then fail 'FIFO path accepted'; fi
   if cda --recent </dev/null >/dev/null 2>&1; then fail 'FIFO picker path accepted'; fi
 )
+# The picker needs no writable alias configuration and must not create one.
+(
+  ALIASES_FILE="$TEST_DIR/unused-aliases"
+  cda --recent </dev/null >/dev/null
+  [[ ! -e "$ALIASES_FILE" ]] || fail 'picker created alias file'
+  ALIASES_FILE=/dev/null/aliases
+  cda --recent </dev/null >/dev/null || fail 'picker depends on alias configuration'
+)
+# Relative overrides are resolved once, so changing directories keeps one history.
+(
+  cd -- "$TEST_DIR"
+  CDA_HISTORY_FILE=relative/recent
+  source "$ROOT/cda.sh"
+  [[ $CDA_HISTORY_FILE == "$TEST_DIR/relative/recent" ]] || fail 'relative history not resolved'
+  _cda_save_directory "$PWD"
+  cd -- "$TEST_DIR/a"
+  _cda_save_directory "$PWD"
+  read_history
+  [[ ${#saved[@]} == 2 && ${saved[0]} == "$TEST_DIR/a" ]] || fail 'relative history split by cwd'
+  [[ ! -e "$TEST_DIR/a/relative" ]] || fail 'relative history created in second cwd'
+  # Changing it after sourcing must fail clearly rather than splitting history.
+  CDA_HISTORY_FILE=another/recent
+  if _cda_save_directory "$PWD" 2>/dev/null; then fail 'relative override accepted after source'; fi
+)
+# Readonly prompt configuration is preserved and does not abort shell startup.
+for prompt_type in scalar array; do
+  CDA_TEST_SOURCE="$ROOT/cda.sh" CDA_TEST_PROMPT_TYPE="$prompt_type" \
+    bash --noprofile --norc -c '
+      set -eu
+      if [[ $CDA_TEST_PROMPT_TYPE == array ]]; then
+        PROMPT_COMMAND=(":" "printf old")
+      else
+        PROMPT_COMMAND=":"
+      fi
+      readonly PROMPT_COMMAND
+      before=$(declare -p PROMPT_COMMAND)
+      source "$CDA_TEST_SOURCE"
+      _cda_install_prompt_hook
+      [[ $(declare -p PROMPT_COMMAND) == "$before" ]]
+    ' 2>"$TEST_DIR/readonly-$prompt_type" || fail 'readonly prompt aborted startup'
+  [[ $(cat "$TEST_DIR/readonly-$prompt_type") == *'PROMPT_COMMAND is readonly'* ]] || fail 'readonly prompt silently skipped'
+done
+# Bad lock-file types must fail before opening them (a FIFO would block forever).
+(
+  CDA_HISTORY_FILE="$TEST_DIR/bad-lock/recent"
+  mkdir -p "$(dirname -- "$CDA_HISTORY_FILE")"
+  mkfifo "${CDA_HISTORY_FILE}.lock"
+  if _cda_save_directory "$TEST_DIR/a" 2>/dev/null; then fail 'FIFO lock accepted'; fi
+  [[ ! -e "$CDA_HISTORY_FILE" ]] || fail 'invalid lock created history'
+)
+# A failed replacement leaves history unchanged and cleans up its temporary file.
+(
+  CDA_HISTORY_FILE="$TEST_DIR/failed-replacement/recent"
+  _cda_save_directory "$TEST_DIR/a"
+  before=$(sha256sum "$CDA_HISTORY_FILE")
+  mv() { return 42; }
+  if _cda_save_directory "$TEST_DIR/b with spaces"; then fail 'failed replacement ignored'; fi
+  [[ $(sha256sum "$CDA_HISTORY_FILE") == "$before" ]] || fail 'failed replacement corrupted history'
+  shopt -s nullglob
+  leftovers=("${CDA_HISTORY_FILE}".??????)
+  [[ ${#leftovers[@]} == 0 ]] || fail 'failed replacement leaked temporary file'
+)
 echo 'All recent-directory checks passed.'

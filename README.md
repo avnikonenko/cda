@@ -143,12 +143,13 @@ Increasing the limit cannot restore discarded entries.
 
 History is stored separately from aliases, at
 `${XDG_STATE_HOME:-$HOME/.local/state}/cda/recent`. Set `CDA_HISTORY_FILE` before
-sourcing the helper to override it. The history uses NUL-separated paths and
-private file permissions. It contains directory names, so choose a private
-location. Tracking requires `flock` (provided by util-linux on Linux); missing
+sourcing the helper to override it; relative paths are resolved at that time.
+The history uses NUL-separated paths and private file permissions. It contains
+directory names, so choose a private location. Tracking requires `flock` (provided by util-linux on Linux); missing
 `flock` or write failures produce an error while named aliases remain usable.
 Concurrent writers use a lock with a two-second timeout and atomic replacement.
-Unchanged prompts perform no file IO or external commands.
+Unchanged prompts perform no file IO or external commands. If `PROMPT_COMMAND`
+is readonly, the helper warns and leaves it unchanged.
 
 Run the regression checks with:
 

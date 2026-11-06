@@ -215,15 +215,18 @@ cda() {
     return 1
   fi
 
-  ensure_aliases_file
-
   if [[ $1 == "--recent" ]]; then
     if [[ $# -ne 1 ]]; then
       echo "Usage: cda --recent" >&2
       return 1
     fi
     _cda_choose_recent
-  elif [[ $1 == "-h" || $1 == "--help" ]]; then
+    return $?
+  fi
+
+  ensure_aliases_file
+
+  if [[ $1 == "-h" || $1 == "--help" ]]; then
     print_usage
   elif [[ $1 == "-l" || $1 == "--list" ]]; then
     if [[ $# -ne 1 ]]; then
@@ -298,6 +301,9 @@ cda() {
 
 # NUL-separated records preserve spaces, tabs, newlines and backslashes.
 CDA_HISTORY_FILE="${CDA_HISTORY_FILE:-${XDG_STATE_HOME:-${HOME}/.local/state}/cda/recent}"
+if [[ "$CDA_HISTORY_FILE" != /* ]]; then
+  CDA_HISTORY_FILE="$PWD/$CDA_HISTORY_FILE"
+fi
 
 _cda_validate_history_limit() {
   if [[ ! "$1" =~ ^[1-9][0-9]{0,4}$ ]] || ((10#$1 > 10000)); then
@@ -307,8 +313,13 @@ _cda_validate_history_limit() {
 }
 
 _cda_check_history_file() {
-  if [[ -e "$CDA_HISTORY_FILE" && ! -f "$CDA_HISTORY_FILE" ]]; then
-    echo "cda: history path must be a regular file: $CDA_HISTORY_FILE" >&2
+  local file=${1:-$CDA_HISTORY_FILE}
+  if [[ "$file" != /* ]]; then
+    echo "cda: set an absolute CDA_HISTORY_FILE, or set it before sourcing cda.sh." >&2
+    return 1
+  fi
+  if [[ -e "$file" && ! -f "$file" ]]; then
+    echo "cda: history path must be a regular file: $file" >&2
     return 1
   fi
 }
@@ -320,6 +331,7 @@ _cda_save_directory() (
 
   _cda_validate_history_limit "$limit" || return 1
   _cda_check_history_file || return 1
+  _cda_check_history_file "${CDA_HISTORY_FILE}.lock" || return 1
   command -v flock >/dev/null 2>&1 || {
     echo "cda: recent directory tracking requires flock." >&2
     return 1
@@ -385,9 +397,14 @@ _cda_choose_recent() {
 }
 
 _cda_install_prompt_hook() {
-  local entry command
+  local entry command declaration
   local -a commands=()
-  if [[ $(declare -p PROMPT_COMMAND 2>/dev/null) =~ ^declare\ -[^[:space:]]*a[^[:space:]]*\  ]]; then
+  declaration=$(declare -p PROMPT_COMMAND 2>/dev/null) || declaration=
+  if [[ $declaration =~ ^declare\ -[^[:space:]]*r ]]; then
+    echo "cda: PROMPT_COMMAND is readonly; prompt integration was left unchanged." >&2
+    return 0
+  fi
+  if [[ $declaration =~ ^declare\ -[^[:space:]]*a[^[:space:]]*\  ]]; then
     for entry in "${PROMPT_COMMAND[@]}"; do
       [[ "$entry" == '_cda_record_prompt' ]] || commands+=("$entry")
     done
