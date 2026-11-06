@@ -79,6 +79,22 @@ cda -r
 cda -l
 ```
 
+## Recent directories
+
+Run `cda --recent` to choose from the last 10 unique locations saved across
+terminal sessions. Enter a number to jump there; Enter alone cancels. Requires
+`flock` for automatic tracking.
+
+To change the limit (1–10000, without leading zeros), add this before the cda
+source line in `~/.bashrc`:
+
+```bash
+CDA_HISTORY_LIMIT=50
+```
+
+Reload `~/.bashrc` in every open terminal so they use the same limit. A smaller
+limit trims shared history; increasing it cannot restore discarded entries.
+
 ## Config
 
 Alias data lives outside the repo:
@@ -117,42 +133,3 @@ rm -rf ~/tools/cda
 ## License
 
 MIT. See [LICENSE](LICENSE).
-
-## Recent directories
-
-Interactive Bash shells automatically remember directories at each prompt, only
-writing when the directory changes. Run `cda --recent`, type a number, and press
-Enter to jump there. Enter alone (or EOF) cancels.
-
-By default, the newest 10 locations are shared across terminals and survive closing them.
-Missing directories are skipped. Tracking starts after you reload the helper;
-commands that visit several directories between prompts record only the final
-location. No exit trap is needed, so forced terminal closure does not lose an
-already recorded location.
-
-To keep more locations, set `CDA_HISTORY_LIMIT` before the existing cda source
-line in `~/.bashrc` (default: 10; range: 1–10000, without leading zeros):
-
-```bash
-CDA_HISTORY_LIMIT=50
-```
-
-Reload `~/.bashrc` in each open terminal. Use the same limit everywhere: a
-terminal with a smaller limit trims shared history on its next directory change.
-Increasing the limit cannot restore discarded entries.
-
-History is stored separately from aliases, at
-`${XDG_STATE_HOME:-$HOME/.local/state}/cda/recent`. Set `CDA_HISTORY_FILE` before
-sourcing the helper to override it; relative paths are resolved at that time.
-The history uses NUL-separated paths and private file permissions. It contains
-directory names, so choose a private location. Tracking requires `flock` (provided by util-linux on Linux); missing
-`flock` or write failures produce an error while named aliases remain usable.
-Concurrent writers use a lock with a two-second timeout and atomic replacement.
-Unchanged prompts perform no file IO or external commands. If `PROMPT_COMMAND`
-is readonly, the helper warns and leaves it unchanged.
-
-Run the regression checks with:
-
-```bash
-bash tests/recent.sh
-```
