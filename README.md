@@ -132,21 +132,16 @@ commands that visit several directories between prompts record only the final
 location. No exit trap is needed, so forced terminal closure does not lose an
 already recorded location.
 
-Set `CDA_HISTORY_LIMIT` to change the number saved and shown (1–10000;
-no leading zeros). For example, add this before the helper's source line in
-`~/.bashrc`:
+To keep more locations, set `CDA_HISTORY_LIMIT` before the existing cda source
+line in `~/.bashrc` (default: 20; range: 1–10000, without leading zeros):
 
 ```bash
 CDA_HISTORY_LIMIT=50
-source ~/.local/share/cda/cda.sh  # use your actual installation path
 ```
 
-Open a new terminal or reload the helper after changing startup configuration.
-You can also run `CDA_HISTORY_LIMIT=50` in the current shell. Use the same setting
-in all terminals: any writer with a smaller limit will trim the shared history
-on its next directory change. Increasing the limit cannot restore discarded
-entries. Invalid limits produce an error without rewriting history; named
-aliases still work. Larger limits increase history IO and picker output linearly.
+Reload `~/.bashrc` in each open terminal. Use the same limit everywhere: a
+terminal with a smaller limit trims shared history on its next directory change.
+Increasing the limit cannot restore discarded entries.
 
 History is stored separately from aliases, at
 `${XDG_STATE_HOME:-$HOME/.local/state}/cda/recent`. Set `CDA_HISTORY_FILE` before
