@@ -15,7 +15,7 @@ exit_or_return() {
 print_usage() {
   cat <<EOF
 Usage:
-  cda --recent                Choose from recent directories (default: 20)
+  cda --recent                Choose from recent directories (default: 10)
   cda <alias>                 Change to directory mapped by <alias>
   cda -a                      Add/update alias named after current directory
   cda -a <alias> [directory]  Add/update alias (directory defaults to current)
@@ -27,7 +27,7 @@ Usage:
 
 Config:
   ${ALIASES_FILE}
-  CDA_HISTORY_LIMIT           Number of recent directories (default: 20; max: 10000)
+  CDA_HISTORY_LIMIT           Number of recent directories (default: 10; max: 10000)
 EOF
 }
 
@@ -326,7 +326,7 @@ _cda_check_history_file() {
 
 _cda_save_directory() (
   umask 077
-  local directory=$1 entry tmp_file limit=${CDA_HISTORY_LIMIT-20}
+  local directory=$1 entry tmp_file limit=${CDA_HISTORY_LIMIT-10}
   local -a directories=("$directory")
 
   _cda_validate_history_limit "$limit" || return 1
@@ -368,7 +368,7 @@ _cda_record_prompt() {
 }
 
 _cda_choose_recent() {
-  local entry choice index limit=${CDA_HISTORY_LIMIT-20}
+  local entry choice index limit=${CDA_HISTORY_LIMIT-10}
   local -a directories=()
   _cda_validate_history_limit "$limit" || return 1
   _cda_check_history_file || return 1

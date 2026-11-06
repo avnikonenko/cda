@@ -58,7 +58,7 @@ Run the dependency and shell integration check without changing anything:
 ## Usage
 
 ```bash
-cda --recent                # choose recent directories (default: 20)
+cda --recent                # choose recent directories (default: 10)
 cda <alias>                 # change to a configured directory
 cda -a                      # add/update alias named after current directory
 cda -a <alias> [directory]  # add/update alias, directory defaults to $PWD
@@ -124,14 +124,14 @@ Interactive Bash shells automatically remember directories at each prompt, only
 writing when the directory changes. Run `cda --recent`, type a number, and press
 Enter to jump there. Enter alone (or EOF) cancels.
 
-By default, the newest 20 locations are shared across terminals and survive closing them.
+By default, the newest 10 locations are shared across terminals and survive closing them.
 Missing directories are skipped. Tracking starts after you reload the helper;
 commands that visit several directories between prompts record only the final
 location. No exit trap is needed, so forced terminal closure does not lose an
 already recorded location.
 
 To keep more locations, set `CDA_HISTORY_LIMIT` before the existing cda source
-line in `~/.bashrc` (default: 20; range: 1–10000, without leading zeros):
+line in `~/.bashrc` (default: 10; range: 1–10000, without leading zeros):
 
 ```bash
 CDA_HISTORY_LIMIT=50

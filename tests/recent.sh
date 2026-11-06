@@ -70,6 +70,7 @@ _CDA_LAST_DIRECTORY=$PWD
 (_cda_save_directory() { fail 'unchanged directory written'; }; _cda_record_prompt)
 # Concurrent shells must retain every update while below the cap.
 export CDA_HISTORY_FILE="$TEST_DIR/concurrent/recent"
+export CDA_HISTORY_LIMIT=20
 pids=()
 for n in {1..12}; do
   mkdir "$TEST_DIR/d$n"
@@ -79,12 +80,13 @@ done
 for pid in "${pids[@]}"; do wait "$pid" || fail concurrency; done
 read_history
 [[ ${#saved[@]} == 12 ]] || fail 'concurrent updates lost'
+unset CDA_HISTORY_LIMIT
 for n in {13..25}; do
   mkdir "$TEST_DIR/d$n"
   _cda_save_directory "$TEST_DIR/d$n"
 done
 read_history
-[[ ${#saved[@]} == 20 && ${saved[0]} == "$TEST_DIR/d25" ]] || fail 'history limit or ordering'
+[[ ${#saved[@]} == 10 && ${saved[0]} == "$TEST_DIR/d25" ]] || fail 'history limit or ordering'
 [[ $(stat -c %a "$CDA_HISTORY_FILE") == 600 ]] || fail permissions
 # Noninteractive sourcing leaves PROMPT_COMMAND untouched.
 bash --noprofile --norc -c 'PROMPT_COMMAND=original; source "$1/cda.sh"; [[ $PROMPT_COMMAND == original ]]' _ "$ROOT" || fail 'noninteractive hook'
