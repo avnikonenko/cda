@@ -85,7 +85,7 @@ Run `cda --recent` to choose from the last 10 unique locations saved across
 terminal sessions. Enter a number to jump there; Enter alone cancels. Requires
 `flock` for automatic tracking.
 
-To change the limit (1–10000, without leading zeros), add this before the cda
+To change the limit (1–10000), add this before the cda
 source line in `~/.bashrc`:
 
 ```bash
