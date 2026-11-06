@@ -34,7 +34,17 @@ cda --recent <<< 1 >/dev/null
 [[ $PWD == "$weird" ]] || fail 'missing directory was not skipped'
 cd -- "$ROOT"
 # A new process sees the same history and changes its own working directory.
-bash --noprofile --norc -c 'source "$1/cda.sh"; cda recent <<< 1 >/dev/null; [[ $PWD == "$2" ]]' _ "$ROOT" "$weird" || fail persistence
+bash --noprofile --norc -c 'source "$1/cda.sh"; cda --recent <<< 1 >/dev/null; [[ $PWD == "$2" ]]' _ "$ROOT" "$weird" || fail persistence
+# A bare recent is an ordinary alias name, never a picker shortcut.
+if cda recent <<< 1 >/dev/null 2>&1; then fail 'bare recent opened picker'; fi
+[[ $PWD == "$ROOT" ]] || fail 'bare recent changed directory'
+COMP_WORDS=(cda rec)
+COMP_CWORD=1
+_cda_completion || :
+[[ ${#COMPREPLY[@]} == 0 ]] || fail 'bare recent offered as command'
+COMP_WORDS=(cda --rec)
+_cda_completion
+[[ ${COMPREPLY[*]} == --recent ]] || fail 'recent flag missing from completion'
 cda -a recent "$TEST_DIR/a" >/dev/null
 cda recent
 [[ $PWD == "$TEST_DIR/a" ]] || fail 'recent alias compatibility'

@@ -58,8 +58,7 @@ Run the dependency and shell integration check without changing anything:
 ## Usage
 
 ```bash
-cda recent                  # choose recent directories (default: 20)
-cda --recent                # picker even if an alias is named recent
+cda --recent                # choose recent directories (default: 20)
 cda <alias>                 # change to a configured directory
 cda -a                      # add/update alias named after current directory
 cda -a <alias> [directory]  # add/update alias, directory defaults to $PWD
@@ -122,9 +121,8 @@ MIT. See [LICENSE](LICENSE).
 ## Recent directories
 
 Interactive Bash shells automatically remember directories at each prompt, only
-writing when the directory changes. Run `cda recent`, type a number, and press
-Enter to jump there. Enter alone (or EOF) cancels. An existing alias named
-`recent` keeps its meaning; `cda --recent` always opens the picker.
+writing when the directory changes. Run `cda --recent`, type a number, and press
+Enter to jump there. Enter alone (or EOF) cancels.
 
 By default, the newest 20 locations are shared across terminals and survive closing them.
 Missing directories are skipped. Tracking starts after you reload the helper;

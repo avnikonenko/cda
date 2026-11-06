@@ -15,8 +15,7 @@ exit_or_return() {
 print_usage() {
   cat <<EOF
 Usage:
-  cda recent                  Choose from recent directories (default: 20)
-  cda --recent                Choose recent directories even with a recent alias
+  cda --recent                Choose from recent directories (default: 20)
   cda <alias>                 Change to directory mapped by <alias>
   cda -a                      Add/update alias named after current directory
   cda -a <alias> [directory]  Add/update alias (directory defaults to current)
@@ -181,7 +180,7 @@ _cda_completion() {
   local cur
   cur="${COMP_WORDS[COMP_CWORD]}"
 
-  local flags="recent --recent -h --help -l --list -a -r -R --remove-all"
+  local flags="--recent -h --help -l --list -a -r -R --remove-all"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=($(compgen -W "$flags $(_cda_alias_names)" -- "$cur"))
@@ -218,7 +217,7 @@ cda() {
 
   ensure_aliases_file
 
-  if [[ $1 == "--recent" ]] || { [[ $1 == "recent" ]] && ! lookup_alias recent >/dev/null; }; then
+  if [[ $1 == "--recent" ]]; then
     if [[ $# -ne 1 ]]; then
       echo "Usage: cda --recent" >&2
       return 1
