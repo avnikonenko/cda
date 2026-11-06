@@ -58,6 +58,8 @@ Run the dependency and shell integration check without changing anything:
 ## Usage
 
 ```bash
+cda recent                  # choose from the last 20 directories
+cda --recent                # picker even if an alias is named recent
 cda <alias>                 # change to a configured directory
 cda -a                      # add/update alias named after current directory
 cda -a <alias> [directory]  # add/update alias, directory defaults to $PWD
@@ -116,3 +118,31 @@ rm -rf ~/tools/cda
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Recent directories
+
+Interactive Bash shells automatically remember directories at each prompt, only
+writing when the directory changes. Run `cda recent`, type a number, and press
+Enter to jump there. Enter alone (or EOF) cancels. An existing alias named
+`recent` keeps its meaning; `cda --recent` always opens the picker.
+
+The newest 20 locations are shared across terminals and survive closing them.
+Missing directories are skipped. Tracking starts after you reload the helper;
+commands that visit several directories between prompts record only the final
+location. No exit trap is needed, so forced terminal closure does not lose an
+already recorded location.
+
+History is stored separately from aliases, at
+`${XDG_STATE_HOME:-$HOME/.local/state}/cda/recent`. Set `CDA_HISTORY_FILE` before
+sourcing the helper to override it. The history uses NUL-separated paths and
+private file permissions. It contains directory names, so choose a private
+location. Tracking requires `flock` (provided by util-linux on Linux); missing
+`flock` or write failures produce an error while named aliases remain usable.
+Concurrent writers use a lock with a two-second timeout and atomic replacement.
+Unchanged prompts perform no file IO or external commands.
+
+Run the regression checks with:
+
+```bash
+bash tests/recent.sh
+```
