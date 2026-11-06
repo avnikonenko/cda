@@ -4,6 +4,7 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 TEST_DIR=$(mktemp -d)
 trap 'rm -rf -- "$TEST_DIR"' EXIT
 export CDA_CONFIG_DIR="$TEST_DIR/config"
+export CDA_ALIASES_FILE="$CDA_CONFIG_DIR/aliases"
 export CDA_HISTORY_FILE="$TEST_DIR/state/recent"
 unset CDA_HISTORY_LIMIT
 source "$ROOT/cda.sh"
@@ -44,15 +45,16 @@ cd -- "$ROOT"
 PROMPT_COMMAND='printf old'
 _cda_install_prompt_hook
 _cda_install_prompt_hook
-[[ $PROMPT_COMMAND == '_cda_record_prompt;printf old' ]] || fail 'string prompt hook'
+[[ $PROMPT_COMMAND == $'printf old\n_cda_record_prompt' ]] || fail 'string prompt hook'
 PROMPT_COMMAND=('printf one' 'printf two')
 _cda_install_prompt_hook
 _cda_install_prompt_hook
-[[ ${#PROMPT_COMMAND[@]} == 3 && ${PROMPT_COMMAND[1]} == 'printf one' ]] || fail 'array prompt hook'
-# Preserve the previous exit status for existing prompt commands.
-if (exit 37); then :; else
-  _cda_record_prompt && fail 'lost exit status' || [[ $? == 37 ]] || fail 'wrong exit status'
-fi
+[[ ${#PROMPT_COMMAND[@]} == 3 && ${PROMPT_COMMAND[0]} == 'printf one' && ${PROMPT_COMMAND[2]} == _cda_record_prompt ]] || fail 'array prompt hook'
+# Reloading an earlier version moves its hook after existing prompt commands.
+unset PROMPT_COMMAND
+PROMPT_COMMAND='_cda_record_prompt;printf old'
+_cda_install_prompt_hook
+[[ $PROMPT_COMMAND == $'printf old\n_cda_record_prompt' ]] || fail 'legacy hook migration'
 # Unchanged prompts must not invoke the writer.
 _CDA_LAST_DIRECTORY=$PWD
 (_cda_save_directory() { fail 'unchanged directory written'; }; _cda_record_prompt)
@@ -79,9 +81,10 @@ bash --noprofile --norc -c 'PROMPT_COMMAND=original; source "$1/cda.sh"; [[ $PRO
 # Exercise automatic registration in a real interactive shell without user rc.
 bash --noprofile --norc -i -c 'source "$1/cda.sh"; source "$1/cda.sh"; [[ $PROMPT_COMMAND == _cda_record_prompt ]]' _ "$ROOT" 2>/dev/null || fail 'interactive hook'
 # Real prompts persist the final location before shell exit.
-bash --noprofile --norc -i >/dev/null 2>&1 <<SHELL
-source "$ROOT/cda.sh"
-cd -- "$TEST_DIR/b with spaces"
+CDA_TEST_SOURCE="$ROOT/cda.sh" CDA_TEST_TARGET="$TEST_DIR/b with spaces" \
+  bash --noprofile --norc -i >/dev/null 2>&1 <<'SHELL'
+source "$CDA_TEST_SOURCE"
+cd -- "$CDA_TEST_TARGET"
 exit
 SHELL
 read_history
@@ -135,5 +138,53 @@ fi
   [[ ${#saved[@]} == 105 ]] || fail 'large history truncated'
   cda --recent <<< 105 >/dev/null
   [[ $PWD == "$TEST_DIR/large1" ]] || fail 'three-digit selection'
+)
+# Preserve real command status for prompt code and the user, without extra ERR traps.
+for prompt_type in scalar array; do
+  CDA_TEST_SOURCE="$ROOT/cda.sh" CDA_TEST_PROMPT_TYPE="$prompt_type" \
+    CDA_TEST_STATUS="$TEST_DIR/status-$prompt_type" \
+    CDA_TEST_USER_STATUS="$TEST_DIR/user-status-$prompt_type" \
+    CDA_TEST_ERRORS="$TEST_DIR/errors-$prompt_type" \
+    bash --noprofile --norc -i >/dev/null 2>&1 <<'SHELL'
+if [[ $CDA_TEST_PROMPT_TYPE == array ]]; then
+  PROMPT_COMMAND=('printf "%s\n" "$?" >> "$CDA_TEST_STATUS"' ':')
+else
+  PROMPT_COMMAND='printf "%s\n" "$?" >> "$CDA_TEST_STATUS" # trailing comment'
+fi
+source "$CDA_TEST_SOURCE"
+source "$CDA_TEST_SOURCE"
+trap 'printf "ERR\n" >> "$CDA_TEST_ERRORS"' ERR
+(exit 37)
+printf '%s\n' "$?" > "$CDA_TEST_USER_STATUS"
+exit
+SHELL
+  statuses=()
+  mapfile -t statuses < "$TEST_DIR/status-$prompt_type"
+  [[ ${statuses[${#statuses[@]} - 2]} == 37 ]] || fail 'prompt command lost exit status'
+  [[ $(cat "$TEST_DIR/user-status-$prompt_type") == 37 ]] || fail 'user lost exit status'
+  [[ $(cat "$TEST_DIR/errors-$prompt_type") == ERR ]] || fail 'extra ERR trap'
+done
+# Shell noclobber must not prevent private history or lock-file updates.
+(
+  export CDA_HISTORY_FILE="$TEST_DIR/noclobber/recent"
+  set -C
+  _cda_save_directory "$TEST_DIR/a"
+  _cda_save_directory "$TEST_DIR/b with spaces"
+  read_history
+  [[ ${#saved[@]} == 2 && ${saved[0]} == "$TEST_DIR/b with spaces" ]] || fail noclobber
+)
+# Invalid file types fail clearly, without moving a temporary file into a directory.
+(
+  export CDA_HISTORY_FILE="$TEST_DIR/not-a-file"
+  mkdir "$CDA_HISTORY_FILE"
+  if _cda_save_directory "$TEST_DIR/a" 2>/dev/null; then fail 'directory path accepted'; fi
+  if cda --recent </dev/null >/dev/null 2>&1; then fail 'directory picker path accepted'; fi
+  shopt -s nullglob dotglob
+  contents=("$CDA_HISTORY_FILE"/*)
+  [[ ${#contents[@]} == 0 ]] || fail 'temporary history moved into directory'
+  rmdir "$CDA_HISTORY_FILE"
+  mkfifo "$CDA_HISTORY_FILE"
+  if _cda_save_directory "$TEST_DIR/a" 2>/dev/null; then fail 'FIFO path accepted'; fi
+  if cda --recent </dev/null >/dev/null 2>&1; then fail 'FIFO picker path accepted'; fi
 )
 echo 'All recent-directory checks passed.'

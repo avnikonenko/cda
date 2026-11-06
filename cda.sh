@@ -307,19 +307,27 @@ _cda_validate_history_limit() {
   fi
 }
 
+_cda_check_history_file() {
+  if [[ -e "$CDA_HISTORY_FILE" && ! -f "$CDA_HISTORY_FILE" ]]; then
+    echo "cda: history path must be a regular file: $CDA_HISTORY_FILE" >&2
+    return 1
+  fi
+}
+
 _cda_save_directory() (
   umask 077
   local directory=$1 entry tmp_file limit=${CDA_HISTORY_LIMIT-20}
   local -a directories=("$directory")
 
   _cda_validate_history_limit "$limit" || return 1
+  _cda_check_history_file || return 1
   command -v flock >/dev/null 2>&1 || {
     echo "cda: recent directory tracking requires flock." >&2
     return 1
   }
   mkdir -p -- "$(dirname -- "$CDA_HISTORY_FILE")" || return 1
   # A separate, stable lock file protects the atomic replacement below.
-  exec 9>"${CDA_HISTORY_FILE}.lock" || return 1
+  exec 9>>"${CDA_HISTORY_FILE}.lock" || return 1
   flock -x -w 2 9 || {
     echo "cda: could not lock recent directory history." >&2
     return 1
@@ -332,12 +340,11 @@ _cda_save_directory() (
   fi
   tmp_file=$(mktemp "${CDA_HISTORY_FILE}.XXXXXX") || return 1
   trap 'rm -f -- "$tmp_file"' EXIT
-  printf '%s\0' "${directories[@]}" > "$tmp_file" || return 1
+  printf '%s\0' "${directories[@]}" >| "$tmp_file" || return 1
   mv -f -- "$tmp_file" "$CDA_HISTORY_FILE"
 )
 
 _cda_record_prompt() {
-  local status=$?
   if [[ ${_CDA_LAST_DIRECTORY-} != "$PWD" && -d "$PWD" ]]; then
     if _cda_save_directory "$PWD"; then
       _CDA_LAST_DIRECTORY=$PWD
@@ -345,13 +352,15 @@ _cda_record_prompt() {
       echo "cda: directory history was not saved." >&2
     fi
   fi
-  return "$status"
+  # Existing prompt commands run first; avoid firing ERR for their status.
+  return 0
 }
 
 _cda_choose_recent() {
   local entry choice index limit=${CDA_HISTORY_LIMIT-20}
   local -a directories=()
   _cda_validate_history_limit "$limit" || return 1
+  _cda_check_history_file || return 1
   if [[ -f "$CDA_HISTORY_FILE" ]]; then
     while [[ ${#directories[@]} -lt $limit ]] && IFS= read -r -d '' entry; do
       [[ -d "$entry" ]] || continue
@@ -377,17 +386,24 @@ _cda_choose_recent() {
 }
 
 _cda_install_prompt_hook() {
-  local entry
+  local entry command
+  local -a commands=()
   if [[ $(declare -p PROMPT_COMMAND 2>/dev/null) =~ ^declare\ -[^[:space:]]*a[^[:space:]]*\  ]]; then
     for entry in "${PROMPT_COMMAND[@]}"; do
-      [[ "$entry" == '_cda_record_prompt' ]] && return 0
+      [[ "$entry" == '_cda_record_prompt' ]] || commands+=("$entry")
     done
-    PROMPT_COMMAND=(_cda_record_prompt "${PROMPT_COMMAND[@]}")
+    PROMPT_COMMAND=("${commands[@]}" _cda_record_prompt)
   else
-    case ";${PROMPT_COMMAND-};" in
-      *';_cda_record_prompt;'*) return 0 ;;
-    esac
-    PROMPT_COMMAND="_cda_record_prompt${PROMPT_COMMAND:+;${PROMPT_COMMAND}}"
+    # Also migrate the prepended hook from earlier versions when re-sourcing.
+    command=${PROMPT_COMMAND-}
+    command=${command#_cda_record_prompt;}
+    if [[ "$command" == '_cda_record_prompt' ]]; then
+      command=
+    else
+      command=${command%$'\n_cda_record_prompt'}
+    fi
+    # A newline keeps the hook outside any trailing shell comment.
+    PROMPT_COMMAND="${command}${command:+$'\n'}_cda_record_prompt"
   fi
 }
 
