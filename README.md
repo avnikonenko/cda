@@ -58,7 +58,7 @@ Run the dependency and shell integration check without changing anything:
 ## Usage
 
 ```bash
-cda recent                  # choose from the last 20 directories
+cda recent                  # choose recent directories (default: 20)
 cda --recent                # picker even if an alias is named recent
 cda <alias>                 # change to a configured directory
 cda -a                      # add/update alias named after current directory
@@ -126,11 +126,27 @@ writing when the directory changes. Run `cda recent`, type a number, and press
 Enter to jump there. Enter alone (or EOF) cancels. An existing alias named
 `recent` keeps its meaning; `cda --recent` always opens the picker.
 
-The newest 20 locations are shared across terminals and survive closing them.
+By default, the newest 20 locations are shared across terminals and survive closing them.
 Missing directories are skipped. Tracking starts after you reload the helper;
 commands that visit several directories between prompts record only the final
 location. No exit trap is needed, so forced terminal closure does not lose an
 already recorded location.
+
+Set `CDA_HISTORY_LIMIT` to change the number saved and shown (1–10000;
+no leading zeros). For example, add this before the helper's source line in
+`~/.bashrc`:
+
+```bash
+CDA_HISTORY_LIMIT=50
+source ~/.local/share/cda/cda.sh  # use your actual installation path
+```
+
+Open a new terminal or reload the helper after changing startup configuration.
+You can also run `CDA_HISTORY_LIMIT=50` in the current shell. Use the same setting
+in all terminals: any writer with a smaller limit will trim the shared history
+on its next directory change. Increasing the limit cannot restore discarded
+entries. Invalid limits produce an error without rewriting history; named
+aliases still work. Larger limits increase history IO and picker output linearly.
 
 History is stored separately from aliases, at
 `${XDG_STATE_HOME:-$HOME/.local/state}/cda/recent`. Set `CDA_HISTORY_FILE` before

@@ -5,6 +5,7 @@ TEST_DIR=$(mktemp -d)
 trap 'rm -rf -- "$TEST_DIR"' EXIT
 export CDA_CONFIG_DIR="$TEST_DIR/config"
 export CDA_HISTORY_FILE="$TEST_DIR/state/recent"
+unset CDA_HISTORY_LIMIT
 source "$ROOT/cda.sh"
 fail() { echo "FAIL: $*" >&2; exit 1; }
 read_history() { mapfile -d '' -t saved < "$CDA_HISTORY_FILE"; }
@@ -94,4 +95,45 @@ if (flock() { return 1; }; _cda_save_directory "$TEST_DIR/a") 2>/dev/null; then
   fail 'lock failure ignored'
 fi
 [[ $(sha256sum "$CDA_HISTORY_FILE") == "$before" ]] || fail 'failed lock changed history'
+# Configured limits apply to storage and the picker, including a limit of one.
+(
+  export CDA_HISTORY_FILE="$TEST_DIR/configurable/recent"
+  mkdir -p -- "$(dirname -- "$CDA_HISTORY_FILE")"
+  printf '%s\0' "$TEST_DIR/a" "$TEST_DIR/missing" > "$CDA_HISTORY_FILE"
+  cda --recent <<< 1 >/dev/null
+  [[ $PWD == "$TEST_DIR/a" ]] || fail 'trailing missing directory'
+  CDA_HISTORY_LIMIT=1
+  _cda_save_directory "$TEST_DIR/a"
+  _cda_save_directory "$TEST_DIR/b with spaces"
+  read_history
+  [[ ${#saved[@]} == 1 && ${saved[0]} == "$TEST_DIR/b with spaces" ]] || fail 'limit one'
+  CDA_HISTORY_LIMIT=3
+  _cda_save_directory "$TEST_DIR/a"
+  _cda_save_directory "$weird"
+  read_history
+  [[ ${#saved[@]} == 3 ]] || fail 'increased limit'
+  CDA_HISTORY_LIMIT=1
+  if cda --recent <<< 2 >/dev/null 2>&1; then fail 'picker ignored configured limit'; fi
+  _cda_save_directory "$TEST_DIR/a"
+  read_history
+  [[ ${#saved[@]} == 1 && ${saved[0]} == "$TEST_DIR/a" ]] || fail 'shrinking limit'
+  before=$(sha256sum "$CDA_HISTORY_FILE")
+  for invalid in '' 0 -1 01 abc '1+1' 10001 99999999999999999999; do
+    CDA_HISTORY_LIMIT=$invalid
+    if _cda_save_directory "$weird" 2>/dev/null; then fail 'invalid limit saved'; fi
+    if cda --recent </dev/null >/dev/null 2>&1; then fail 'invalid picker limit accepted'; fi
+  done
+  [[ $(sha256sum "$CDA_HISTORY_FILE") == "$before" ]] || fail 'invalid limit changed history'
+  _cda_validate_history_limit 10000 || fail 'maximum limit rejected'
+  # Larger histories must allow selections above 99.
+  CDA_HISTORY_LIMIT=105
+  for n in {1..105}; do
+    mkdir "$TEST_DIR/large$n"
+    _cda_save_directory "$TEST_DIR/large$n"
+  done
+  read_history
+  [[ ${#saved[@]} == 105 ]] || fail 'large history truncated'
+  cda --recent <<< 105 >/dev/null
+  [[ $PWD == "$TEST_DIR/large1" ]] || fail 'three-digit selection'
+)
 echo 'All recent-directory checks passed.'

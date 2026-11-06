@@ -15,7 +15,7 @@ exit_or_return() {
 print_usage() {
   cat <<EOF
 Usage:
-  cda recent                  Choose from the last 20 directories
+  cda recent                  Choose from recent directories (default: 20)
   cda --recent                Choose recent directories even with a recent alias
   cda <alias>                 Change to directory mapped by <alias>
   cda -a                      Add/update alias named after current directory
@@ -28,6 +28,7 @@ Usage:
 
 Config:
   ${ALIASES_FILE}
+  CDA_HISTORY_LIMIT           Number of recent directories (default: 20; max: 10000)
 EOF
 }
 
@@ -299,11 +300,19 @@ cda() {
 # NUL-separated records preserve spaces, tabs, newlines and backslashes.
 CDA_HISTORY_FILE="${CDA_HISTORY_FILE:-${XDG_STATE_HOME:-${HOME}/.local/state}/cda/recent}"
 
+_cda_validate_history_limit() {
+  if [[ ! "$1" =~ ^[1-9][0-9]{0,4}$ ]] || ((10#$1 > 10000)); then
+    echo "cda: CDA_HISTORY_LIMIT must be an integer from 1 to 10000 (no leading zeros)." >&2
+    return 1
+  fi
+}
+
 _cda_save_directory() (
   umask 077
-  local directory=$1 entry tmp_file
+  local directory=$1 entry tmp_file limit=${CDA_HISTORY_LIMIT-20}
   local -a directories=("$directory")
 
+  _cda_validate_history_limit "$limit" || return 1
   command -v flock >/dev/null 2>&1 || {
     echo "cda: recent directory tracking requires flock." >&2
     return 1
@@ -316,10 +325,9 @@ _cda_save_directory() (
     return 1
   }
   if [[ -f "$CDA_HISTORY_FILE" ]]; then
-    while IFS= read -r -d '' entry; do
+    while [[ ${#directories[@]} -lt $limit ]] && IFS= read -r -d '' entry; do
       [[ "$entry" != "$directory" && -d "$entry" ]] || continue
       directories+=("$entry")
-      [[ ${#directories[@]} -lt 20 ]] || break
     done < "$CDA_HISTORY_FILE" || return 1
   fi
   tmp_file=$(mktemp "${CDA_HISTORY_FILE}.XXXXXX") || return 1
@@ -341,12 +349,13 @@ _cda_record_prompt() {
 }
 
 _cda_choose_recent() {
-  local entry choice index
+  local entry choice index limit=${CDA_HISTORY_LIMIT-20}
   local -a directories=()
+  _cda_validate_history_limit "$limit" || return 1
   if [[ -f "$CDA_HISTORY_FILE" ]]; then
-    while IFS= read -r -d '' entry; do
-      [[ -d "$entry" ]] && directories+=("$entry")
-      [[ ${#directories[@]} -lt 20 ]] || break
+    while [[ ${#directories[@]} -lt $limit ]] && IFS= read -r -d '' entry; do
+      [[ -d "$entry" ]] || continue
+      directories+=("$entry")
     done < "$CDA_HISTORY_FILE" || return 1
   fi
   if [[ ${#directories[@]} -eq 0 ]]; then
@@ -359,7 +368,7 @@ _cda_choose_recent() {
   IFS= read -r -p "Directory number (Enter to cancel): " choice || return 0
   [[ -n "$choice" ]] || return 0
   # Limit input length before arithmetic to avoid overflow and expressions.
-  if [[ ! "$choice" =~ ^[0-9]{1,2}$ ]] ||
+  if [[ ! "$choice" =~ ^[0-9]{1,5}$ ]] ||
      ((10#$choice < 1 || 10#$choice > ${#directories[@]})); then
     echo "Invalid directory number." >&2
     return 1
